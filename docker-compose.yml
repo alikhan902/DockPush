@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:17
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - .env
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./Back
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./Back/django-battleships-master:/app
+    working_dir: /app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: always
+
+  frontend:
+    build:
+      context: ./Front
+    volumes:
+      - ./Front:/app
+    environment:
+      - CI=true
+    stdin_open: true
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./Front/build:/usr/share/nginx/html
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  postgres_data:
